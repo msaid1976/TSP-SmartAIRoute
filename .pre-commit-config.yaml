@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff-check
+        entry: .venv/bin/ruff check .
+        language: system
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff-format
+        entry: .venv/bin/ruff format --check .
+        language: system
+        pass_filenames: false
+      - id: eslint
+        name: eslint
+        entry: pnpm --dir apps/web lint
+        language: system
+        pass_filenames: false

@@ -1,0 +1,10 @@
+{
+  "name": "smartroute-ai",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "lint": "pnpm --dir apps/web lint",
+    "typecheck": "pnpm --dir apps/web typecheck"
+  }
+}
+
