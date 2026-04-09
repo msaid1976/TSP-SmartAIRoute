@@ -16,6 +16,11 @@ Map datasets live in:
 - `apps/web/app/new-problem/malaysia-cities.ts` (Malaysia city list and simple outlines)
 - `apps/web/app/new-problem/country-cities.ts` (country registry; to add a new country, add another `CountryDefinition`)
 
+## Phase overview
+
+- Phase 001: monorepo foundation, Docker Compose stack, `/api/health`, worker ping
+- Phase 002: ingestion + normalization, problems table + preview endpoint, GraphCanvas draw mode, map picker (countries + cities)
+
 ## Prerequisites
 
 - Node.js 20+
