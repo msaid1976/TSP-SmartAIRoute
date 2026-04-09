@@ -22,7 +22,7 @@ export function ParsedPreviewCard({
         <Badge>Parsed Preview</Badge>
         <CardTitle>{heading}</CardTitle>
         <CardDescription>
-          Normalized nodes, detected problem type, and any warnings from the ingestion pipeline.
+          Normalized nodes, detected problem type, weighted matrix summary, and any warnings from the ingestion pipeline.
         </CardDescription>
       </div>
 
@@ -63,12 +63,12 @@ export function ParsedPreviewCard({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-3xl border border-border bg-slate-950/60 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                Distance Matrix
+                Weighted Matrix
               </p>
               <p className="mt-2 text-sm text-slate-200">
                 {problem.distanceMatrix
                   ? `${problem.distanceMatrix.length} × ${problem.distanceMatrix[0]?.length ?? 0}`
-                  : "Computed from coordinates"}
+                  : "Computed from coordinates when no matrix is provided"}
               </p>
             </div>
             <div className="rounded-3xl border border-border bg-slate-950/60 p-4">

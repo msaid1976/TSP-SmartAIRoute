@@ -2,7 +2,7 @@ import logging
 
 from smartroute_shared.schemas import PingResponse
 
-from worker_app.celery_app import celery_app
+from app.workers.celery_client import celery_app
 
 logger = logging.getLogger(__name__)
 

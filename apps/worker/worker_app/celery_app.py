@@ -1,26 +1,11 @@
 from typing import Any
 
-from celery import Celery
 from celery.signals import worker_ready
-from smartroute_shared.settings import get_shared_settings
+from celery import Celery
 
-settings = get_shared_settings()
-
-celery_app = Celery(
-    "smartroute-worker",
-    broker=settings.celery_broker_url,
-    backend=settings.celery_result_backend,
-    include=["worker_app.tasks"],
-)
-
-celery_app.conf.update(
-    task_default_queue="smartroute",
-    task_serializer="json",
-    accept_content=["json"],
-    result_serializer="json",
-    timezone="UTC",
-    enable_utc=True,
-)
+from app.workers.celery_client import celery_app
+from app.workers.tasks import run_solver_task  # noqa: F401
+from worker_app.tasks import ping  # noqa: F401
 
 
 @worker_ready.connect

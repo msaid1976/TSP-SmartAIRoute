@@ -4,12 +4,16 @@ import { useMemo, useState } from "react";
 
 import type {
   CanonicalProblem,
+  CreateJobRequest,
+  CreateJobResponse,
   ProblemInputRequest,
   ProblemInputType,
   ProblemPreviewResponse,
   SerializedCanvasPayload,
+  SolverName,
 } from "@smartroute/shared";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 
 import {
   DRAW_DEMO_SAMPLES,
@@ -24,6 +28,7 @@ import { COUNTRIES, DEFAULT_COUNTRY_CODE } from "@/app/new-problem/country-citie
 import { CountryCityPicker } from "@/components/map/CountryCityPicker";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { getSolverDisplay } from "@/lib/solver-display";
 
 const GraphCanvas = dynamic(
   () => import("@/components/canvas/GraphCanvas").then((module) => module.GraphCanvas),
@@ -58,6 +63,7 @@ const EMPTY_CANVAS_PAYLOAD: SerializedCanvasPayload = {
 };
 
 export default function NewProblemPage(): JSX.Element {
+  const router = useRouter();
   const [mode, setMode] = useState<ProblemInputType>("text");
   const [showSamples, setShowSamples] = useState(false);
   const [problemName, setProblemName] = useState("");
@@ -78,6 +84,9 @@ export default function NewProblemPage(): JSX.Element {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [errorMessages, setErrorMessages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLaunchingJob, setIsLaunchingJob] = useState(false);
+  const [selectedSolvers, setSelectedSolvers] = useState<SolverName[]>(["ortools", "ga", "aco"]);
+  const [jobSeed, setJobSeed] = useState("42");
 
   const apiBaseUrl = useMemo(
     () => process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000",
@@ -97,6 +106,60 @@ export default function NewProblemPage(): JSX.Element {
 
   async function handleCreate(): Promise<void> {
     await submit("create");
+  }
+
+  async function handleSaveAndRun(): Promise<void> {
+    if (mode === "image") {
+      setErrorMessages(["Image ingestion is a Phase 006B stub."]);
+      return;
+    }
+
+    if (selectedSolvers.length === 0) {
+      setErrorMessages(["Select at least one solver before launching Phase 003."]);
+      return;
+    }
+
+    const request = buildRequest({
+      mode,
+      textInput,
+      tableInput,
+      matrixInput,
+      matrixLabelsInput,
+      canvasPayload,
+      problemName,
+      mapCountryCode,
+      mapCityIds,
+      mapStartCityId,
+    });
+
+    setIsLaunchingJob(true);
+    setErrorMessages([]);
+
+    try {
+      const createdProblem = await createProblem(request, apiBaseUrl);
+      setPreview(createdProblem);
+      setWarnings([]);
+
+      const parsedSeed = jobSeed.trim() === "" ? null : Number(jobSeed.trim());
+      if (parsedSeed !== null && Number.isNaN(parsedSeed)) {
+        throw new Error("Seed must be empty or a valid number.");
+      }
+
+      const createJobRequest: CreateJobRequest = {
+        problemId: createdProblem.problemId,
+        solvers: selectedSolvers,
+        mode: selectedSolvers.length > 1 ? "compare" : "quick",
+        seed: parsedSeed,
+      };
+
+      const job = await createJob(createJobRequest, apiBaseUrl);
+      router.push(`/jobs/${job.jobId}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setErrorMessages([message]);
+    } finally {
+      setIsLaunchingJob(false);
+    }
   }
 
   async function submit(action: "preview" | "create"): Promise<void> {
@@ -121,34 +184,14 @@ export default function NewProblemPage(): JSX.Element {
     setErrorMessages([]);
 
     try {
-      const response = await fetch(
-        `${apiBaseUrl}${action === "preview" ? "/api/problems/preview" : "/api/problems"}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(request),
-        },
-      );
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { detail?: string[] | string };
-        const details = Array.isArray(payload.detail)
-          ? payload.detail
-          : [payload.detail ?? "Request failed."];
-        setErrorMessages(details);
-        return;
-      }
-
       if (action === "preview") {
-        const payload = (await response.json()) as ProblemPreviewResponse;
+        const payload = await previewProblem(request, apiBaseUrl);
         setPreview(payload.problem);
         setWarnings(payload.warnings);
         return;
       }
 
-      const payload = (await response.json()) as CanonicalProblem;
+      const payload = await createProblem(request, apiBaseUrl);
       setPreview(payload);
       setWarnings([]);
     } catch (error) {
@@ -208,15 +251,23 @@ export default function NewProblemPage(): JSX.Element {
     setCanvasInstanceKey((current) => current + 1);
   }
 
+  function toggleSolver(solver: SolverName): void {
+    setSelectedSolvers((current) =>
+      current.includes(solver)
+        ? current.filter((item) => item !== solver)
+        : [...current, solver],
+    );
+  }
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-[1760px] flex-col gap-8 px-6 py-14">
       <section className="space-y-4">
-        <Badge>Phase 002</Badge>
+        <Badge>Phase 002 + 003</Badge>
         <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
-          Ingest routing problems from text, tables, matrices, and the canvas.
+          Ingest routing problems, then launch async solver jobs directly.
         </h1>
         <p className="max-w-3xl text-lg text-slate-300">
-          Everything normalizes into the generic nodes-and-distances schema before persistence.
+          Everything normalizes into the generic nodes-and-weighted-matrix schema before persistence, whether the edge values represent distance, cost, or time.
         </p>
       </section>
 
@@ -396,7 +447,7 @@ export default function NewProblemPage(): JSX.Element {
                   >
                     <p className="text-sm font-semibold text-white">Peninsular run</p>
                     <p className="mt-2 text-sm text-slate-300">
-                      A larger peninsular set to show a richer distance matrix.
+                      A larger peninsular set to show a richer weighted matrix generated from map coordinates.
                     </p>
                   </button>
                 </div>
@@ -465,7 +516,7 @@ export default function NewProblemPage(): JSX.Element {
               </label>
               <div className="rounded-2xl border border-border bg-slate-950/60 px-4 py-3 text-sm text-slate-300">
                 <p className="font-medium text-white">Normalization target</p>
-                <p className="mt-1">Canonical problem schema with nodes, matrix, objective, and metadata.</p>
+                <p className="mt-1">Canonical problem schema with nodes, weighted matrix, objective, and metadata.</p>
               </div>
             </div>
           </div>
@@ -556,6 +607,69 @@ export default function NewProblemPage(): JSX.Element {
             >
               Save problem
             </button>
+          </div>
+
+          <div className="rounded-[1.75rem] border border-border bg-slate-950/60 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-5">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  Phase 003
+                </p>
+                <h2 className="text-xl font-semibold text-white">Launch Async Solvers</h2>
+                <p className="max-w-2xl text-sm text-slate-300">
+                  This saves the current problem, creates a solver job, and redirects to the live status page. The solvers optimize whatever edge weight the matrix represents: distance, cost, or time.
+                </p>
+              </div>
+
+              <label className="space-y-2">
+                <span className="text-sm font-medium text-slate-200">Seed</span>
+                <input
+                  value={jobSeed}
+                  onChange={(event) => setJobSeed(event.target.value)}
+                  placeholder="Optional"
+                  className="w-28 rounded-2xl border border-border bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-400"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              {(["ortools", "ga", "aco"] as SolverName[]).map((solver) => {
+                const isSelected = selectedSolvers.includes(solver);
+                const display = getSolverDisplay(solver);
+                return (
+                  <button
+                    key={solver}
+                    type="button"
+                    onClick={() => toggleSolver(solver)}
+                    className={[
+                      "rounded-[1.5rem] border p-4 text-left transition",
+                      isSelected
+                        ? "border-blue-400 bg-blue-500/15 text-white shadow-[0_0_0_1px_rgba(59,130,246,0.15)]"
+                        : "border-border bg-slate-900/60 text-slate-300 hover:border-blue-400/50 hover:text-white",
+                    ].join(" ")}
+                  >
+                    <span className="inline-flex rounded-full border border-blue-400/30 bg-slate-950/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-200">
+                      {display.abbreviation}
+                    </span>
+                    <span className="mt-3 block text-base font-semibold text-white">
+                      {display.fullName}
+                    </span>
+                    <span className="mt-1 block text-sm text-slate-300">{display.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleSaveAndRun}
+                disabled={isSubmitting || isLaunchingJob}
+                className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLaunchingJob ? "Launching…" : "Save + Run Phase 003"}
+              </button>
+            </div>
           </div>
 
           {errorMessages.length > 0 ? (
@@ -670,4 +784,69 @@ function parseDelimitedGrid(input: string): string[][] {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => line.split(",").map((cell) => cell.trim()));
+}
+
+async function previewProblem(
+  request: ProblemInputRequest,
+  apiBaseUrl: string,
+): Promise<ProblemPreviewResponse> {
+  const response = await fetch(`${apiBaseUrl}/api/problems/preview`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response));
+  }
+
+  return (await response.json()) as ProblemPreviewResponse;
+}
+
+async function createProblem(
+  request: ProblemInputRequest,
+  apiBaseUrl: string,
+): Promise<CanonicalProblem> {
+  const response = await fetch(`${apiBaseUrl}/api/problems`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response));
+  }
+
+  return (await response.json()) as CanonicalProblem;
+}
+
+async function createJob(
+  request: CreateJobRequest,
+  apiBaseUrl: string,
+): Promise<CreateJobResponse> {
+  const response = await fetch(`${apiBaseUrl}/api/jobs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response));
+  }
+
+  return (await response.json()) as CreateJobResponse;
+}
+
+async function extractErrorMessage(response: Response): Promise<string> {
+  const payload = (await response.json()) as { detail?: string[] | string };
+  if (Array.isArray(payload.detail)) {
+    return payload.detail.join(" ");
+  }
+  return payload.detail ?? `Request failed with status ${response.status}.`;
 }

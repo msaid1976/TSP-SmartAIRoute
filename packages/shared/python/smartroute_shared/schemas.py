@@ -8,6 +8,10 @@ from pydantic import BaseModel, Field
 ProblemType = Literal["tsp", "atsp", "weighted_tsp", "matrix_tsp", "open_tsp"]
 ProblemObjective = Literal["min_distance", "min_cost", "min_time"]
 ProblemInputType = Literal["text", "table", "matrix", "gui", "map", "image"]
+SolverName = Literal["ortools", "ga", "aco"]
+JobMode = Literal["quick", "compare", "goal"]
+JobStatus = Literal["queued", "running", "completed", "failed", "timeout"]
+SolverRunStatus = Literal["queued", "running", "completed", "failed", "timeout"]
 
 
 class HealthResponse(BaseModel):
@@ -74,3 +78,57 @@ class ProblemPreviewResponse(BaseModel):
 class ProblemDistanceMatrixResponse(BaseModel):
     problemId: UUID
     distanceMatrix: list[list[float]]
+
+
+class SolverResult(BaseModel):
+    solver: SolverName
+    status: Literal["completed"]
+    route: list[str]
+    totalDistance: float
+    totalCost: float
+    runtimeMs: int
+    iterations: int
+    convergence: list[float] = Field(default_factory=list)
+    seed: int | None = None
+    solverParams: dict[str, Any] = Field(default_factory=dict)
+    notes: list[str] = Field(default_factory=list)
+
+
+class CreateJobRequest(BaseModel):
+    problemId: UUID
+    solvers: list[SolverName] = Field(min_length=1)
+    mode: JobMode = "quick"
+    goalObjective: ProblemObjective | None = None
+    seed: int | None = None
+
+
+class CreateJobResponse(BaseModel):
+    jobId: UUID
+    status: JobStatus
+
+
+class SolverRunResponse(BaseModel):
+    id: UUID
+    jobId: UUID
+    solverName: SolverName
+    runIndex: int
+    seed: int | None = None
+    status: SolverRunStatus
+    totalDistance: float | None = None
+    runtimeMs: int | None = None
+    route: list[str] | None = None
+    convergence: list[float] = Field(default_factory=list)
+    createdAt: str
+
+
+class JobStatusResponse(BaseModel):
+    jobId: UUID
+    problemId: UUID
+    mode: JobMode
+    status: JobStatus
+    progress: float
+    submittedAt: str
+    startedAt: str | None = None
+    completedAt: str | None = None
+    failureReason: str | None = None
+    runs: list[SolverRunResponse] = Field(default_factory=list)

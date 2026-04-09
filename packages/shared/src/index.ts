@@ -12,6 +12,10 @@ export interface PingResponse {
 export type ProblemType = "tsp" | "atsp" | "weighted_tsp" | "matrix_tsp" | "open_tsp";
 export type ProblemObjective = "min_distance" | "min_cost" | "min_time";
 export type ProblemInputType = "text" | "table" | "matrix" | "gui" | "map" | "image";
+export type SolverName = "ortools" | "ga" | "aco";
+export type JobMode = "quick" | "compare" | "goal";
+export type JobStatus = "queued" | "running" | "completed" | "failed" | "timeout";
+export type SolverRunStatus = "queued" | "running" | "completed" | "failed" | "timeout";
 
 export interface ProblemNode {
   id: string;
@@ -66,6 +70,60 @@ export interface ProblemPreviewResponse {
 export interface ProblemDistanceMatrixResponse {
   problemId: string;
   distanceMatrix: number[][];
+}
+
+export interface SolverResult {
+  solver: SolverName;
+  status: "completed";
+  route: string[];
+  totalDistance: number;
+  totalCost: number;
+  runtimeMs: number;
+  iterations: number;
+  convergence: number[];
+  seed: number | null;
+  solverParams: Record<string, unknown>;
+  notes: string[];
+}
+
+export interface CreateJobRequest {
+  problemId: string;
+  solvers: SolverName[];
+  mode?: JobMode;
+  goalObjective?: ProblemObjective | null;
+  seed?: number | null;
+}
+
+export interface CreateJobResponse {
+  jobId: string;
+  status: JobStatus;
+}
+
+export interface SolverRunResponse {
+  id: string;
+  jobId: string;
+  solverName: SolverName;
+  runIndex: number;
+  seed: number | null;
+  status: SolverRunStatus;
+  totalDistance: number | null;
+  runtimeMs: number | null;
+  route: string[] | null;
+  convergence: number[];
+  createdAt: string;
+}
+
+export interface JobStatusResponse {
+  jobId: string;
+  problemId: string;
+  mode: JobMode;
+  status: JobStatus;
+  progress: number;
+  submittedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  failureReason: string | null;
+  runs: SolverRunResponse[];
 }
 
 export interface SerializedCanvasPayload {
