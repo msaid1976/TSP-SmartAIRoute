@@ -85,7 +85,16 @@ export default function NewProblemPage(): JSX.Element {
   const [errorMessages, setErrorMessages] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLaunchingJob, setIsLaunchingJob] = useState(false);
-  const [selectedSolvers, setSelectedSolvers] = useState<SolverName[]>(["ortools", "ga", "aco"]);
+  const [selectedSolvers, setSelectedSolvers] = useState<SolverName[]>([
+    "ortools",
+    "ga",
+    "aco",
+    "sa",
+    "pso",
+    "nsga2",
+    "tabu",
+    "de",
+  ]);
   const [jobSeed, setJobSeed] = useState("42");
 
   const apiBaseUrl = useMemo(
@@ -145,10 +154,15 @@ export default function NewProblemPage(): JSX.Element {
         throw new Error("Seed must be empty or a valid number.");
       }
 
+      if (selectedSolvers.length > 1) {
+        router.push(`/comparisons/${createdProblem.problemId}`);
+        return;
+      }
+
       const createJobRequest: CreateJobRequest = {
         problemId: createdProblem.problemId,
         solvers: selectedSolvers,
-        mode: selectedSolvers.length > 1 ? "compare" : "quick",
+        mode: "quick",
         seed: parsedSeed,
       };
 
@@ -613,11 +627,11 @@ export default function NewProblemPage(): JSX.Element {
             <div className="flex flex-wrap items-start justify-between gap-5">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                  Phase 003
+                  Phase 004
                 </p>
-                <h2 className="text-xl font-semibold text-white">Launch Async Solvers</h2>
+                <h2 className="text-xl font-semibold text-white">Run Solvers Or Full Benchmark</h2>
                 <p className="max-w-2xl text-sm text-slate-300">
-                  This saves the current problem, creates a solver job, and redirects to the live status page. The solvers optimize whatever edge weight the matrix represents: distance, cost, or time.
+                  One selected solver launches the live job page. Two or more selected solvers launch the full Phase 004 benchmark across all eight engines and open the comparison dashboard.
                 </p>
               </div>
 
@@ -632,8 +646,8 @@ export default function NewProblemPage(): JSX.Element {
               </label>
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
-              {(["ortools", "ga", "aco"] as SolverName[]).map((solver) => {
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {(["ortools", "ga", "aco", "sa", "pso", "nsga2", "tabu", "de"] as SolverName[]).map((solver) => {
                 const isSelected = selectedSolvers.includes(solver);
                 const display = getSolverDisplay(solver);
                 return (
@@ -667,7 +681,11 @@ export default function NewProblemPage(): JSX.Element {
                 disabled={isSubmitting || isLaunchingJob}
                 className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isLaunchingJob ? "Launching…" : "Save + Run Phase 003"}
+                {isLaunchingJob
+                  ? "Launching…"
+                  : selectedSolvers.length > 1
+                    ? "Save + Run Phase 004 Benchmark"
+                    : "Save + Run Solver"}
               </button>
             </div>
           </div>

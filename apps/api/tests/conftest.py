@@ -5,7 +5,7 @@ import pytest
 from app.db.base import Base
 from app.db.session import get_db_session
 from app.main import app
-from app.models import JobRecord, ProblemRecord, SolverRunRecord  # noqa: F401
+from app.models import ComparisonRecord, JobRecord, ProblemRecord, SolverRunRecord  # noqa: F401
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker

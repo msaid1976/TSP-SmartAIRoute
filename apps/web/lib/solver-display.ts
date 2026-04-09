@@ -12,15 +12,40 @@ const SOLVER_DISPLAY: Record<SolverName, SolverDisplay> = {
     description: "Pheromone-guided swarm search",
     fullName: "Ant Colony Optimization",
   },
+  de: {
+    abbreviation: "DE",
+    description: "Random-key differential mutation search",
+    fullName: "Differential Evolution",
+  },
   ga: {
     abbreviation: "GA",
     description: "Population-based evolutionary search",
     fullName: "Genetic Algorithm",
   },
+  nsga2: {
+    abbreviation: "NSGA-II",
+    description: "Pareto-front multi-objective optimization",
+    fullName: "Non-Dominated Sorting Genetic Algorithm II",
+  },
   ortools: {
     abbreviation: "OR-Tools",
     description: "Google exact routing solver",
     fullName: "Operations Research Tools",
+  },
+  pso: {
+    abbreviation: "PSO",
+    description: "Swarm particles with rank-decoded tours",
+    fullName: "Particle Swarm Optimization",
+  },
+  sa: {
+    abbreviation: "SA",
+    description: "Temperature-controlled 2-opt search",
+    fullName: "Simulated Annealing",
+  },
+  tabu: {
+    abbreviation: "Tabu",
+    description: "Memory-guided local search with diversification",
+    fullName: "Tabu Search",
   },
 };
 

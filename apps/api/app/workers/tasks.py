@@ -71,9 +71,13 @@ def _execute_solver_run(session: Session, job_id: str, solver_run_id: str) -> No
 
     solver_run.status = "completed"
     solver_run.total_distance = result.totalDistance
+    solver_run.total_cost = result.totalCost
     solver_run.runtime_ms = result.runtimeMs
+    solver_run.iterations = result.iterations
     solver_run.route_json = result.route
     solver_run.convergence_json = result.convergence
+    solver_run.solver_params_json = result.solverParams
+    solver_run.notes_json = result.notes
     session.add(solver_run)
     sync_job_status(session, job)
     session.commit()

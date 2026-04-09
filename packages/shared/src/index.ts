@@ -12,7 +12,7 @@ export interface PingResponse {
 export type ProblemType = "tsp" | "atsp" | "weighted_tsp" | "matrix_tsp" | "open_tsp";
 export type ProblemObjective = "min_distance" | "min_cost" | "min_time";
 export type ProblemInputType = "text" | "table" | "matrix" | "gui" | "map" | "image";
-export type SolverName = "ortools" | "ga" | "aco";
+export type SolverName = "ortools" | "ga" | "aco" | "sa" | "pso" | "nsga2" | "tabu" | "de";
 export type JobMode = "quick" | "compare" | "goal";
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "timeout";
 export type SolverRunStatus = "queued" | "running" | "completed" | "failed" | "timeout";
@@ -86,6 +86,12 @@ export interface SolverResult {
   notes: string[];
 }
 
+export interface ParetoFrontPoint {
+  route: string[];
+  distance: number;
+  maxEdge: number;
+}
+
 export interface CreateJobRequest {
   problemId: string;
   solvers: SolverName[];
@@ -124,6 +130,53 @@ export interface JobStatusResponse {
   completedAt: string | null;
   failureReason: string | null;
   runs: SolverRunResponse[];
+}
+
+export interface SolverAggregate {
+  solver: SolverName;
+  nRuns: number;
+  successfulRuns: number;
+  avgDistance: number;
+  bestDistance: number;
+  worstDistance: number;
+  stdDev: number;
+  avgRuntimeMs: number;
+  bestRuntimeMs: number;
+  stabilityScore: number;
+  feasibilityRate: number;
+  qualityScore: number;
+  runtimeScore: number;
+  scalabilityScore: number;
+  constraintFit: number;
+  finalScore: number;
+}
+
+export interface ComparisonRankingEntry {
+  solver: SolverName;
+  score: number;
+  totalDistance: number;
+  runtimeMs: number;
+}
+
+export interface ComparisonSummaryCards {
+  bestDistanceSolver: SolverName;
+  fastestSolver: SolverName;
+  mostStableSolver: SolverName;
+  recommendedSolver: SolverName;
+}
+
+export interface ComparisonResult {
+  comparisonId: string;
+  problemId: string;
+  jobId: string;
+  recommendedSolver: SolverName;
+  recommendationReason: string;
+  tradeOffText: string | null;
+  ranking: ComparisonRankingEntry[];
+  aggregates: SolverAggregate[];
+  summaryCards: ComparisonSummaryCards;
+  runs: SolverResult[];
+  createdAt: string;
 }
 
 export interface SerializedCanvasPayload {

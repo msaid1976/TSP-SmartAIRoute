@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 ProblemType = Literal["tsp", "atsp", "weighted_tsp", "matrix_tsp", "open_tsp"]
 ProblemObjective = Literal["min_distance", "min_cost", "min_time"]
 ProblemInputType = Literal["text", "table", "matrix", "gui", "map", "image"]
-SolverName = Literal["ortools", "ga", "aco"]
+SolverName = Literal["ortools", "ga", "aco", "sa", "pso", "nsga2", "tabu", "de"]
 JobMode = Literal["quick", "compare", "goal"]
 JobStatus = Literal["queued", "running", "completed", "failed", "timeout"]
 SolverRunStatus = Literal["queued", "running", "completed", "failed", "timeout"]
@@ -94,6 +94,12 @@ class SolverResult(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class ParetoFrontPoint(BaseModel):
+    route: list[str]
+    distance: float
+    maxEdge: float
+
+
 class CreateJobRequest(BaseModel):
     problemId: UUID
     solvers: list[SolverName] = Field(min_length=1)
@@ -132,3 +138,50 @@ class JobStatusResponse(BaseModel):
     completedAt: str | None = None
     failureReason: str | None = None
     runs: list[SolverRunResponse] = Field(default_factory=list)
+
+
+class SolverAggregate(BaseModel):
+    solver: SolverName
+    nRuns: int
+    successfulRuns: int
+    avgDistance: float
+    bestDistance: float
+    worstDistance: float
+    stdDev: float
+    avgRuntimeMs: float
+    bestRuntimeMs: int
+    stabilityScore: float
+    feasibilityRate: float
+    qualityScore: float
+    runtimeScore: float
+    scalabilityScore: float
+    constraintFit: float
+    finalScore: float
+
+
+class ComparisonRankingEntry(BaseModel):
+    solver: SolverName
+    score: float
+    totalDistance: float
+    runtimeMs: float
+
+
+class ComparisonSummaryCards(BaseModel):
+    bestDistanceSolver: SolverName
+    fastestSolver: SolverName
+    mostStableSolver: SolverName
+    recommendedSolver: SolverName
+
+
+class ComparisonResult(BaseModel):
+    comparisonId: UUID
+    problemId: UUID
+    jobId: UUID
+    recommendedSolver: SolverName
+    recommendationReason: str
+    tradeOffText: str | None = None
+    ranking: list[ComparisonRankingEntry] = Field(default_factory=list)
+    aggregates: list[SolverAggregate] = Field(default_factory=list)
+    summaryCards: ComparisonSummaryCards
+    runs: list[SolverResult] = Field(default_factory=list)
+    createdAt: str

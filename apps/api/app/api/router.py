@@ -1,11 +1,13 @@
 from fastapi import APIRouter
 
+from app.api.routes.comparisons import router as comparisons_router
 from app.api.routes.health import router as health_router
 from app.api.routes.jobs import router as jobs_router
 from app.api.routes.problems import router as problems_router
 from app.api.routes.runs import router as runs_router
 
 api_router = APIRouter()
+api_router.include_router(comparisons_router)
 api_router.include_router(health_router)
 api_router.include_router(jobs_router)
 api_router.include_router(problems_router)

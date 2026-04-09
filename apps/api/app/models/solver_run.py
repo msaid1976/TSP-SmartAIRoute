@@ -26,9 +26,13 @@ class SolverRunRecord(Base):
     seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
     total_distance: Mapped[float | None] = mapped_column(nullable=True)
+    total_cost: Mapped[float | None] = mapped_column(nullable=True)
     runtime_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    iterations: Mapped[int | None] = mapped_column(Integer, nullable=True)
     route_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     convergence_json: Mapped[list[float]] = mapped_column(JSON, nullable=False, default=list)
+    solver_params_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    notes_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
