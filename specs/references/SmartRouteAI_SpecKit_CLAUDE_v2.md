@@ -36,6 +36,7 @@ It models nodes, edges, distances, and objectives.
 - Text parser handles malformed input gracefully (returns warnings, not crashes)
 - Normalizer is deterministic: same input → same UUID? (no — UUID is generated fresh each call, that is correct)
 - Distance matrix is correct: symmetric for Euclidean, asymmetric allowed for matrix_tsp
+- Map ingestion works (Malaysia first): lat/lon payload produces a haversine distance matrix (km) and stays generic via metadata.geo
 - `POST /problems/preview` never writes to DB — verify with query log
 - Validation errors are human-readable strings, not Python exception messages
 
@@ -76,7 +77,7 @@ It models nodes, edges, distances, and objectives.
 - Pydantic v2 everywhere in Python. TypeScript strict everywhere in frontend
 - No solver logic outside `/solvers/`. No secrets hardcoded
 - Generic problem model: nodes + distances only — no domain entities
-- Canonical schemas frozen after Phase 002 — changes need human approval
+- Canonical schemas frozen after Phase 002 — changes need human approval (map inputType is included as part of Phase 002 ingestion)
 - Recommendation engine is rule-based only — never calls an LLM
 - Phase gates are hard stops — human must confirm before proceeding
 - All stochastic solvers accept `seed` for reproducibility

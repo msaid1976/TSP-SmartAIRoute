@@ -33,6 +33,9 @@ Every problem normalizes to exactly:
 
 No machine_id. No technician_id. No delivery_date. No installation_date. No truck_capacity.
 
+Geo/map note: map ingestion (Malaysia first) stores geo context only in `metadata.geo` (e.g. `coordinateSystem=latlon`)
+and computes a haversine distance matrix so solvers continue to consume the same generic schema.
+
 ## BaseSolver contract (frozen — never change)
 Every solver extends BaseSolver and implements:
   solve(problem: dict) → dict

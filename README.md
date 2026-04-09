@@ -7,6 +7,15 @@ Phase 001 provides the monorepo foundation for SmartRoute AI:
 - `apps/worker`: Celery worker with Redis broker and startup `ping` task
 - `packages/shared`: shared TypeScript types and Python Pydantic schemas
 
+Phase 002 adds stateless preview + persistence for generic problems (nodes + distances), including:
+- text, table, matrix ingestion
+- draw canvas ingestion
+- map ingestion (Malaysia cities first, plus starter Indonesia/Singapore/Thailand), which stores geo info in metadata and computes a haversine distance matrix
+
+Map datasets live in:
+- `apps/web/app/new-problem/malaysia-cities.ts` (Malaysia city list and simple outlines)
+- `apps/web/app/new-problem/country-cities.ts` (country registry; to add a new country, add another `CountryDefinition`)
+
 ## Prerequisites
 
 - Node.js 20+
@@ -127,4 +136,3 @@ pre-commit run --all-files
 - `apps/api/alembic/versions/` is intentionally empty in this phase.
 - The health endpoint verifies database connectivity before returning `db: connected`.
 - All Python configuration flows through Pydantic Settings in `packages/shared/python/smartroute_shared/settings.py`.
-

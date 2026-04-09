@@ -1,6 +1,8 @@
+from collections.abc import Iterator
 from functools import lru_cache
 
 from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.settings import get_settings
 
@@ -16,3 +18,22 @@ def check_database_connection() -> bool:
         connection.execute(text("SELECT 1"))
 
     return True
+
+
+@lru_cache(maxsize=1)
+def get_session_factory() -> sessionmaker[Session]:
+    return sessionmaker(
+        bind=get_engine(),
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+    )
+
+
+def get_db_session() -> Iterator[Session]:
+    session = get_session_factory()()
+
+    try:
+        yield session
+    finally:
+        session.close()

@@ -20,7 +20,7 @@ I do not write code. I describe issues precisely so the human can give them to C
 6. Do solvers run in Celery — not blocking the API thread?
 7. Are there adequate tests for the new code?
 8. Are there any hardcoded secrets (passwords, keys) in the code?
-9. Are the canonical problem and result schemas unchanged from Phase 002?
+9. Are the canonical problem and result schemas unchanged from Phase 002 (including the approved `map` ingestion inputType and `metadata.geo` usage)?
 10. Does any solver contain VeRoLog domain fields (Gene, delivery_date, technician_id)?
     If yes, flag this — these must not appear in the codebase.
 

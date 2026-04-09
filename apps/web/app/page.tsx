@@ -55,6 +55,12 @@ export default async function HomePage(): Promise<JSX.Element> {
               Phase 001 establishes the monorepo, runtime services, shared contracts, and health
               checks that every later solver and workflow will build on.
             </p>
+            <a
+              href="/new-problem"
+              className="inline-flex rounded-full border border-blue-400/40 bg-blue-500/15 px-5 py-3 text-sm font-medium text-blue-100 transition hover:bg-blue-500/25"
+            >
+              Open Phase 002 problem ingestion
+            </a>
           </div>
           <HealthStatus health={health} endpoint={endpoint} errorMessage={errorMessage} />
         </section>
@@ -79,4 +85,3 @@ export default async function HomePage(): Promise<JSX.Element> {
     </main>
   );
 }
-

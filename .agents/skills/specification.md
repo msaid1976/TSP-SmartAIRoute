@@ -93,16 +93,29 @@ smartroute-ai/
     "maxNodeCount": 500
   },
   "metadata": {
-    "inputSources": ["text", "table", "canvas", "matrix", "image"],
+    "inputSources": ["text", "table", "matrix", "gui", "map", "image"],
     "sourceText": "",
     "sourceTableRows": [],
-    "sourceImageRef": null
+    "sourceImageRef": null,
+    "geo": {
+      "countryCode": "MY",
+      "countryName": "Malaysia",
+      "coordinateSystem": "latlon"
+    }
   }
 }
 ```
 
 **Distance matrix path:** When `distanceMatrix` is provided (not null), solvers use it directly
 and ignore `x`/`y` coordinates. This enables asymmetric TSP and any custom distance function.
+
+**Map ingestion path (Phase 002):** When `metadata.geo.coordinateSystem` is `latlon`, the normalizer
+computes a haversine distance matrix (km). The canonical schema stays generic; geo context remains
+in `metadata.geo` only.
+
+**Country/city datasets (Phase 002):**
+- Malaysia city list + simple outlines: `apps/web/app/new-problem/malaysia-cities.ts`
+- Country registry (add more countries by adding another `CountryDefinition`): `apps/web/app/new-problem/country-cities.ts`
 
 **problemType values:**
 - `tsp` — symmetric, Euclidean coordinates

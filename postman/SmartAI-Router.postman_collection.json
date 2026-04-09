@@ -1,0 +1,327 @@
+{
+  "info": {
+    "_postman_id": "f0dc1460-9701-457d-8dc2-9fb3878e5f0f",
+    "name": "SmartAI-Router",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "problemId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Preview - Text",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputType\": \"text\",\n  \"payload\": \"A(0,0), B(3,5), C(7,2), D(1,8)\",\n  \"objective\": \"min_distance\",\n  \"returnToStart\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/problems/preview",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "problems",
+            "preview"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Preview - Table Rows",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputType\": \"table\",\n  \"payload\": [\n    [\"name\", \"x\", \"y\"],\n    [\"Warehouse A\", \"0\", \"0\"],\n    [\"Port B\", \"3\", \"5\"],\n    [\"Depot C\", \"7\", \"2\"]\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/problems/preview",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "problems",
+            "preview"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Preview - Table CSV Text",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputType\": \"table\",\n  \"payload\": {\n    \"text\": \"name,x,y\\nWarehouse A,0,0\\nPort B,3,5\\nDepot C,7,2\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/problems/preview",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "problems",
+            "preview"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Preview - Matrix",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputType\": \"matrix\",\n  \"payload\": {\n    \"data\": [\n      [0, 10, 15],\n      [10, 0, 20],\n      [15, 20, 0]\n    ],\n    \"labels\": [\"A\", \"B\", \"C\"]\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/problems/preview",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "problems",
+            "preview"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Preview - GUI",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputType\": \"gui\",\n  \"payload\": {\n    \"nodes\": [\n      { \"id\": \"A\", \"label\": \"A\", \"x\": 12.5, \"y\": 30.0 },\n      { \"id\": \"B\", \"label\": \"B\", \"x\": 48.0, \"y\": 18.0 },\n      { \"id\": \"C\", \"label\": \"C\", \"x\": 75.0, \"y\": 28.0 }\n    ],\n    \"edges\": [\n      { \"sourceId\": \"A\", \"targetId\": \"B\" },\n      { \"sourceId\": \"B\", \"targetId\": \"C\" }\n    ],\n    \"startNodeId\": \"A\",\n    \"returnToStart\": true,\n    \"objective\": \"min_distance\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/problems/preview",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "problems",
+            "preview"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Create Problem - Text",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "  const data = pm.response.json();",
+              "  pm.collectionVariables.set(\"problemId\", data.problemId);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputType\": \"text\",\n  \"payload\": \"A(0,0), B(3,5), C(7,2), D(1,8)\",\n  \"objective\": \"min_distance\",\n  \"returnToStart\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/problems",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "problems"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Problem",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/problems/{{problemId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "problems",
+            "{{problemId}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Distance Matrix",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/problems/{{problemId}}/distance-matrix",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "problems",
+            "{{problemId}}",
+            "distance-matrix"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Validation Error - Too Few Nodes",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"inputType\": \"text\",\n  \"payload\": \"A(0,0)\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/problems/preview",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "problems",
+            "preview"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

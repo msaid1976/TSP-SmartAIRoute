@@ -236,7 +236,7 @@ Both must be in `SOLVER_REGISTRY` and pass both standard fixtures:
 - `DifferentialEvolutionSolver` — random-key encoding, DE/rand/1/bin mutation (F=0.8, CR=0.9), greedy selection, 2-opt on best each generation
 
 ### Phase 007 roadmap (post-launch — do not implement before Phase 006 confirmed)
-- **7A Leaflet map integration:** real GPS coordinates shown on OpenStreetMap tile layer, route as polyline
+- **7A Leaflet map integration:** upgrade the Phase 002 SVG country/city picker into a real OpenStreetMap tile layer + route polyline
 - **7B VRP-lite:** multi-vehicle routing, multi-route result, coloured routes per vehicle in RouteViewer
 - **7C Export reports:** PDF (route diagram + ranking table + recommendation), CSV (all 8 solver metrics), JSON (full ComparisonResult)
 
