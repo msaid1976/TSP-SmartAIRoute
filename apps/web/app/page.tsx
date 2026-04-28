@@ -1,87 +1,89 @@
-import type { HealthResponse } from "@smartroute/shared";
+import Link from "next/link";
 
-import { HealthStatus } from "@/components/health-status";
-import { getInternalApiBaseUrl } from "@/lib/env";
-
-async function fetchHealth(): Promise<{
-  health: HealthResponse | null;
-  endpoint: string;
-  errorMessage: string | null;
-}> {
-  const endpoint = `${getInternalApiBaseUrl()}/api/health`;
-
-  try {
-    const response = await fetch(endpoint, { cache: "no-store" });
-
-    if (!response.ok) {
-      return {
-        health: null,
-        endpoint,
-        errorMessage: `Health check failed with status ${response.status}.`,
-      };
-    }
-
-    return {
-      health: (await response.json()) as HealthResponse,
-      endpoint,
-      errorMessage: null,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-
-    return {
-      health: null,
-      endpoint,
-      errorMessage: `Health check is unavailable: ${message}`,
-    };
-  }
-}
-
-export default async function HomePage(): Promise<JSX.Element> {
-  const { health, endpoint, errorMessage } = await fetchHealth();
-
+export default function HomePage(): JSX.Element {
   return (
-    <main className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-6 py-16">
-      <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
-        <section className="space-y-8">
-          <div className="space-y-4">
+    <main className="min-h-screen bg-background">
+      <section className="mx-auto flex w-full max-w-7xl flex-col gap-16 px-6 py-16 md:py-24">
+        <div className="grid gap-12 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+          <div className="space-y-8">
             <p className="font-mono text-sm uppercase tracking-[0.35em] text-blue-300">
               SmartRoute AI
             </p>
-            <h1 className="max-w-3xl text-5xl font-semibold tracking-tight text-white md:text-6xl">
-              Generic routing optimization starts with a clean foundation.
-            </h1>
-            <p className="max-w-2xl text-lg text-slate-300">
-              Phase 001 establishes the monorepo, runtime services, shared contracts, and health
-              checks that every later solver and workflow will build on.
-            </p>
-            <a
-              href="/new-problem"
-              className="inline-flex rounded-full border border-blue-400/40 bg-blue-500/15 px-5 py-3 text-sm font-medium text-blue-100 transition hover:bg-blue-500/25"
-            >
-              Open Phase 002 problem ingestion
-            </a>
-          </div>
-          <HealthStatus health={health} endpoint={endpoint} errorMessage={errorMessage} />
-        </section>
-
-        <section className="rounded-[2rem] border border-border bg-slate-950/40 p-8 shadow-glow">
-          <div className="space-y-6">
-            <div>
-              <p className="font-mono text-sm uppercase tracking-[0.28em] text-slate-400">
-                Included
+            <div className="space-y-5">
+              <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-white md:text-7xl">
+                Solve routing problems intelligently
+              </h1>
+              <p className="max-w-2xl text-lg leading-8 text-slate-300">
+                Model routes in text, tables, matrices, or a visual graph canvas, then benchmark multiple optimization engines and inspect the recommendation dashboard in one flow.
               </p>
-              <h2 className="mt-3 text-2xl font-semibold text-white">Phase 001 deliverables</h2>
             </div>
-            <ul className="space-y-4 text-slate-300">
-              <li>Next.js 14 App Router shell with strict TypeScript and Tailwind.</li>
-              <li>FastAPI service with SQLAlchemy, Alembic, and Pydantic Settings.</li>
-              <li>Celery worker wired to Redis with a startup ping task.</li>
-              <li>Shared TypeScript and Python schemas for cross-app contracts.</li>
-            </ul>
+            <div className="flex flex-wrap gap-4">
+              <Link
+                href="/new-problem"
+                className="inline-flex items-center rounded-full border border-blue-400/40 bg-blue-500/15 px-6 py-3 text-sm font-semibold text-blue-100 transition hover:bg-blue-500/25"
+              >
+                Start solving -&gt;
+              </Link>
+            </div>
           </div>
+
+          <section className="rounded-[2rem] border border-border bg-[#1E2A3A]/80 p-8 shadow-glow backdrop-blur">
+            <div className="space-y-6">
+              <p className="text-xs uppercase tracking-[0.26em] text-slate-400">
+                Platform Snapshot
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Highlight label="Input modes" value="5" />
+                <Highlight label="Solvers" value="8" />
+                <Highlight label="Benchmark runs" value="24" />
+                <Highlight label="Recommendation" value="Rule-based" />
+              </div>
+              <p className="text-sm leading-7 text-slate-300">
+                Deep comparison views, Pareto front analysis, and asynchronous benchmark execution are already wired into the product workflow.
+              </p>
+            </div>
+          </section>
+        </div>
+
+        <section className="grid gap-5 md:grid-cols-3">
+          <FeatureCard
+            title="Multi-modal input"
+            description="Capture routing problems from free text, CSV tables, editable matrices, and interactive graph drawing."
+          />
+          <FeatureCard
+            title="8 solver engines"
+            description="Benchmark OR-Tools, GA, ACO, SA, PSO, NSGA-II, Tabu Search, and Differential Evolution on the same normalized problem."
+          />
+          <FeatureCard
+            title="Smart recommendation"
+            description="Review distance, runtime, stability, and trade-off summaries to choose the solver that best matches the goal."
+          />
         </section>
-      </div>
+      </section>
     </main>
+  );
+}
+
+function FeatureCard({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}): JSX.Element {
+  return (
+    <article className="rounded-[2rem] border border-border bg-[#1E2A3A]/70 p-6 shadow-glow">
+      <p className="text-xs uppercase tracking-[0.24em] text-blue-300">{title}</p>
+      <p className="mt-4 text-base leading-7 text-slate-200">{description}</p>
+    </article>
+  );
+}
+
+function Highlight({ label, value }: { label: string; value: string }): JSX.Element {
+  return (
+    <div className="rounded-[1.5rem] border border-border bg-slate-950/50 p-4">
+      <p className="text-xs uppercase tracking-[0.22em] text-slate-400">{label}</p>
+      <p className="mt-3 font-mono text-2xl text-white">{value}</p>
+    </div>
   );
 }

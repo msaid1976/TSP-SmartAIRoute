@@ -18,7 +18,7 @@ Users: anyone with a routing problem — cities, warehouses, delivery stops, abs
 ## Technology stack (frozen — do not change without explicit approval)
 - Frontend: Next.js 14 App Router, TypeScript strict mode, Tailwind CSS, shadcn/ui, Recharts, react-konva
 - Backend: FastAPI, Pydantic v2, PostgreSQL 15, Redis 7, Celery 5
-- Solvers: OR-Tools, GA, ACO, SA, PSO, NSGA-II
+- Solvers: OR-Tools, GA, ACO, SA, PSO, NSGA-II, Tabu Search, Differential Evolution
 - Infrastructure: Docker Compose, Alembic migrations, pnpm workspaces
 
 ## Generic problem model (never add domain-specific fields)
@@ -51,7 +51,7 @@ Every solver extends BaseSolver and implements:
 - ACO notebook: multi-phase pipeline (ACO → SA → VNS), elite ant reinforcement, stagnation detection
 
 ## Solver registry
-SOLVER_REGISTRY = { "ortools", "ga", "aco", "sa", "pso", "nsga2" }
+SOLVER_REGISTRY = { "ortools", "ga", "aco", "sa", "pso", "nsga2", "tabu", "de" }
 All solvers extend BaseSolver in apps/api/solvers/base.py.
 All solvers must: accept seed, record convergence[], call validate_route() before returning.
 

@@ -12,7 +12,7 @@ const config: Config = {
       colors: {
         background: "#0A0F1E",
         foreground: "#FFFFFF",
-        card: "#10172A",
+        card: "#1E2A3A",
         muted: "#6B7280",
         border: "rgba(59, 130, 246, 0.18)",
         accent: "#3B82F6",
@@ -34,4 +34,3 @@ const config: Config = {
 };
 
 export default config;
-

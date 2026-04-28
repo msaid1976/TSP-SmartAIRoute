@@ -37,12 +37,6 @@ export function RecommendationCard({ comparison }: RecommendationCardProps): JSX
 
       {winner ? <MetricGrid winner={winner} /> : null}
 
-      {comparison.tradeOffText ? (
-        <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-950/70 p-4">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Trade-off</p>
-          <p className="mt-2 text-sm text-slate-200">{comparison.tradeOffText}</p>
-        </div>
-      ) : null}
     </Card>
   );
 }

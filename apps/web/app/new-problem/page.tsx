@@ -1,53 +1,50 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   CanonicalProblem,
-  CreateJobRequest,
-  CreateJobResponse,
   ProblemInputRequest,
   ProblemInputType,
   ProblemPreviewResponse,
   SerializedCanvasPayload,
-  SolverName,
 } from "@smartroute/shared";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 
 import {
   DRAW_DEMO_SAMPLES,
-  IMAGE_DEMO_SAMPLES,
   MATRIX_DEMO_SAMPLES,
   TABLE_DEMO_SAMPLES,
   TEXT_DEMO_SAMPLES,
-  demoCountByMode,
 } from "@/app/new-problem/demo-samples";
+import { ErrorState } from "@/components/FetchState";
 import { ParsedPreviewCard } from "@/components/ParsedPreviewCard";
-import { COUNTRIES, DEFAULT_COUNTRY_CODE } from "@/app/new-problem/country-cities";
-import { CountryCityPicker } from "@/components/map/CountryCityPicker";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { getSolverDisplay } from "@/lib/solver-display";
+import { createProblem, previewProblem } from "@/lib/api-client";
 
 const GraphCanvas = dynamic(
   () => import("@/components/canvas/GraphCanvas").then((module) => module.GraphCanvas),
   {
     ssr: false,
     loading: () => (
-      <div className="rounded-[1.75rem] border border-border bg-slate-950/80 p-8 text-sm text-slate-400">
-        Loading canvas…
+      <div className="rounded-[1.75rem] border border-border bg-[#111A2A]/85 p-8 text-sm text-slate-300">
+        Loading graph canvas...
       </div>
     ),
   },
 );
 
-const MODES: Array<{ id: ProblemInputType; label: string }> = [
+type InputTab = Extract<ProblemInputType, "text" | "table" | "matrix" | "gui" | "image">;
+type PreviewState = "idle" | "loading" | "success" | "error";
+type TableDetection = "node_list" | "distance_matrix" | "unknown";
+
+const TABS: Array<{ id: InputTab; label: string }> = [
   { id: "text", label: "Text" },
   { id: "table", label: "Table" },
   { id: "matrix", label: "Matrix" },
   { id: "gui", label: "Draw" },
-  { id: "map", label: "Map" },
   { id: "image", label: "Image" },
 ];
 
@@ -64,736 +61,720 @@ const EMPTY_CANVAS_PAYLOAD: SerializedCanvasPayload = {
 
 export default function NewProblemPage(): JSX.Element {
   const router = useRouter();
-  const [mode, setMode] = useState<ProblemInputType>("text");
-  const [showSamples, setShowSamples] = useState(false);
-  const [problemName, setProblemName] = useState("");
-  const [textInput, setTextInput] = useState("A(0,0), B(3,5), C(6,2)");
-  const [tableInput, setTableInput] = useState("id,x,y\nA,0,0\nB,3,5\nC,6,2");
-  const [matrixInput, setMatrixInput] = useState("0,10,15\n10,0,20\n15,20,0");
-  const [matrixLabelsInput, setMatrixLabelsInput] = useState("A, B, C");
-  const [canvasInitialPayload, setCanvasInitialPayload] = useState<SerializedCanvasPayload>(
-    EMPTY_CANVAS_PAYLOAD,
+  const [activeTab, setActiveTab] = useState<InputTab>("text");
+  const [problemName, setProblemName] = useState("Harbor route demo");
+  const [textInput, setTextInput] = useState(TEXT_DEMO_SAMPLES[1]?.text ?? "");
+  const [tableInput, setTableInput] = useState(TABLE_DEMO_SAMPLES[0]?.csv ?? "");
+  const [matrixSize, setMatrixSize] = useState(4);
+  const [matrixLabels, setMatrixLabels] = useState<string[]>(createDefaultLabels(4));
+  const [matrixData, setMatrixData] = useState<string[][]>(() =>
+    createDefaultMatrix(4, MATRIX_DEMO_SAMPLES[0]?.matrix),
   );
-  const [canvasPayload, setCanvasPayload] = useState<SerializedCanvasPayload>(EMPTY_CANVAS_PAYLOAD);
-  const [canvasInstanceKey, setCanvasInstanceKey] = useState(0);
-  const [activeImageSampleId, setActiveImageSampleId] = useState(IMAGE_DEMO_SAMPLES[0]?.id ?? "");
-  const [mapCountryCode, setMapCountryCode] = useState(DEFAULT_COUNTRY_CODE);
-  const [mapCityIds, setMapCityIds] = useState<string[]>([]);
-  const [mapStartCityId, setMapStartCityId] = useState<string | null>(null);
+  const [canvasPayload, setCanvasPayload] = useState<SerializedCanvasPayload>(
+    DRAW_DEMO_SAMPLES[0]?.payload ?? EMPTY_CANVAS_PAYLOAD,
+  );
+  const [canvasInitialPayload, setCanvasInitialPayload] = useState<SerializedCanvasPayload>(
+    DRAW_DEMO_SAMPLES[0]?.payload ?? EMPTY_CANVAS_PAYLOAD,
+  );
+  const [canvasKey, setCanvasKey] = useState(0);
   const [preview, setPreview] = useState<CanonicalProblem | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [errorMessages, setErrorMessages] = useState<string[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLaunchingJob, setIsLaunchingJob] = useState(false);
-  const [selectedSolvers, setSelectedSolvers] = useState<SolverName[]>([
-    "ortools",
-    "ga",
-    "aco",
-    "sa",
-    "pso",
-    "nsga2",
-    "tabu",
-    "de",
-  ]);
-  const [jobSeed, setJobSeed] = useState("42");
+  const [previewState, setPreviewState] = useState<PreviewState>("idle");
+  const [previewMode, setPreviewMode] = useState<InputTab | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isAdvancing, setIsAdvancing] = useState(false);
 
-  const apiBaseUrl = useMemo(
-    () => process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000",
-    [],
+  const tableDetection = useMemo<TableDetection>(
+    () => detectTableFormat(tableInput),
+    [tableInput],
   );
 
-  const activeImageSample = useMemo(
-    () =>
-      IMAGE_DEMO_SAMPLES.find((sample) => sample.id === activeImageSampleId) ??
-      IMAGE_DEMO_SAMPLES[0],
-    [activeImageSampleId],
-  );
+  useEffect(() => {
+    setPreview(null);
+    setWarnings([]);
+    setErrorMessage(null);
+    setPreviewState(activeTab === "text" ? "loading" : "idle");
+    setPreviewMode(null);
+
+    if (activeTab !== "text") {
+      return;
+    }
+
+    const request = buildRequest({
+      activeTab,
+      canvasPayload,
+      matrixData,
+      matrixLabels,
+      problemName,
+      tableDetection,
+      tableInput,
+      textInput,
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      void runLivePreview(request);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeTab, canvasPayload, matrixData, matrixLabels, problemName, tableDetection, tableInput, textInput]);
+
+  async function runLivePreview(request: ProblemInputRequest): Promise<void> {
+    if (String(request.payload).trim() === "") {
+      setPreview(null);
+      setWarnings([]);
+      setPreviewState("idle");
+      setPreviewMode(null);
+      setErrorMessage(null);
+      return;
+    }
+
+    try {
+      const payload = await previewProblem(request);
+      setPreview(payload.problem);
+      setWarnings(payload.warnings);
+      setPreviewState("success");
+      setPreviewMode("text");
+      setErrorMessage(null);
+    } catch (error) {
+      setPreview(null);
+      setWarnings([]);
+      setPreviewState("error");
+      setPreviewMode(null);
+      setErrorMessage(error instanceof Error ? error.message : "Unable to parse text input.");
+    }
+  }
 
   async function handlePreview(): Promise<void> {
-    await submit("preview");
-  }
-
-  async function handleCreate(): Promise<void> {
-    await submit("create");
-  }
-
-  async function handleSaveAndRun(): Promise<void> {
-    if (mode === "image") {
-      setErrorMessages(["Image ingestion is a Phase 006B stub."]);
-      return;
-    }
-
-    if (selectedSolvers.length === 0) {
-      setErrorMessages(["Select at least one solver before launching Phase 003."]);
+    if (activeTab === "image") {
+      setErrorMessage("OCR extraction is planned for Phase 006B and is not available yet.");
+      setPreviewState("error");
       return;
     }
 
     const request = buildRequest({
-      mode,
-      textInput,
-      tableInput,
-      matrixInput,
-      matrixLabelsInput,
+      activeTab,
       canvasPayload,
+      matrixData,
+      matrixLabels,
       problemName,
-      mapCountryCode,
-      mapCityIds,
-      mapStartCityId,
+      tableDetection,
+      tableInput,
+      textInput,
     });
 
-    setIsLaunchingJob(true);
-    setErrorMessages([]);
+    setPreviewState("loading");
+    setErrorMessage(null);
 
     try {
-      const createdProblem = await createProblem(request, apiBaseUrl);
-      setPreview(createdProblem);
-      setWarnings([]);
-
-      const parsedSeed = jobSeed.trim() === "" ? null : Number(jobSeed.trim());
-      if (parsedSeed !== null && Number.isNaN(parsedSeed)) {
-        throw new Error("Seed must be empty or a valid number.");
-      }
-
-      if (selectedSolvers.length > 1) {
-        router.push(`/comparisons/${createdProblem.problemId}`);
-        return;
-      }
-
-      const createJobRequest: CreateJobRequest = {
-        problemId: createdProblem.problemId,
-        solvers: selectedSolvers,
-        mode: "quick",
-        seed: parsedSeed,
-      };
-
-      const job = await createJob(createJobRequest, apiBaseUrl);
-      router.push(`/jobs/${job.jobId}`);
+      const payload: ProblemPreviewResponse = await previewProblem(request);
+      setPreview(payload.problem);
+      setWarnings(payload.warnings);
+      setPreviewState("success");
+      setPreviewMode(activeTab);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      setErrorMessages([message]);
-    } finally {
-      setIsLaunchingJob(false);
+      setPreview(null);
+      setWarnings([]);
+      setPreviewState("error");
+      setPreviewMode(null);
+      setErrorMessage(error instanceof Error ? error.message : "Unable to preview the problem.");
     }
   }
 
-  async function submit(action: "preview" | "create"): Promise<void> {
-    if (mode === "image") {
-      setErrorMessages(["Image ingestion is a Phase 006B stub."]);
-      return;
-    }
-
+  async function handleNext(): Promise<void> {
     const request = buildRequest({
-      mode,
-      textInput,
-      tableInput,
-      matrixInput,
-      matrixLabelsInput,
+      activeTab,
       canvasPayload,
+      matrixData,
+      matrixLabels,
       problemName,
-      mapCountryCode,
-      mapCityIds,
-      mapStartCityId,
+      tableDetection,
+      tableInput,
+      textInput,
     });
-    setIsSubmitting(true);
-    setErrorMessages([]);
+
+    setIsAdvancing(true);
+    setErrorMessage(null);
 
     try {
-      if (action === "preview") {
-        const payload = await previewProblem(request, apiBaseUrl);
-        setPreview(payload.problem);
-        setWarnings(payload.warnings);
-        return;
-      }
-
-      const payload = await createProblem(request, apiBaseUrl);
-      setPreview(payload);
-      setWarnings([]);
+      const problem = await createProblem(request);
+      router.push(`/problems/${problem.problemId}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      setErrorMessages([`Request failed: ${message}`]);
+      setErrorMessage(error instanceof Error ? error.message : "Unable to create the problem.");
     } finally {
-      setIsSubmitting(false);
+      setIsAdvancing(false);
     }
   }
 
-  function applyTextSample(sampleId: string): void {
-    const sample = TEXT_DEMO_SAMPLES.find((item) => item.id === sampleId);
-    if (!sample) {
-      return;
-    }
-
-    setProblemName(sample.name);
-    setTextInput(sample.text);
-  }
-
-  function applyTableSample(sampleId: string): void {
-    const sample = TABLE_DEMO_SAMPLES.find((item) => item.id === sampleId);
-    if (!sample) {
-      return;
-    }
-
-    setProblemName(sample.name);
-    setTableInput(sample.csv);
-  }
-
-  function applyMatrixSample(sampleId: string): void {
-    const sample = MATRIX_DEMO_SAMPLES.find((item) => item.id === sampleId);
-    if (!sample) {
-      return;
-    }
-
-    setProblemName(sample.name);
-    setMatrixInput(sample.matrix);
-    setMatrixLabelsInput(sample.labels);
-  }
-
-  function applyDrawSample(sampleId: string): void {
-    const sample = DRAW_DEMO_SAMPLES.find((item) => item.id === sampleId);
-    if (!sample) {
-      return;
-    }
-
-    setProblemName(sample.name);
-    setCanvasInitialPayload(sample.payload);
-    setCanvasPayload(sample.payload);
-    setCanvasInstanceKey((current) => current + 1);
-  }
-
-  function resetCanvas(): void {
-    setCanvasInitialPayload(EMPTY_CANVAS_PAYLOAD);
-    setCanvasPayload(EMPTY_CANVAS_PAYLOAD);
-    setCanvasInstanceKey((current) => current + 1);
-  }
-
-  function toggleSolver(solver: SolverName): void {
-    setSelectedSolvers((current) =>
-      current.includes(solver)
-        ? current.filter((item) => item !== solver)
-        : [...current, solver],
-    );
-  }
+  const nextEnabled = preview !== null && previewMode === activeTab && previewState === "success";
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-[1760px] flex-col gap-8 px-6 py-14">
-      <section className="space-y-4">
-        <Badge>Phase 002 + 003</Badge>
-        <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
-          Ingest routing problems, then launch async solver jobs directly.
-        </h1>
-        <p className="max-w-3xl text-lg text-slate-300">
-          Everything normalizes into the generic nodes-and-weighted-matrix schema before persistence, whether the edge values represent distance, cost, or time.
-        </p>
+    <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-8 px-6 py-14">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(380px,0.8fr)]">
+        <div className="space-y-4">
+          <Badge>Phase 005</Badge>
+          <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-white md:text-5xl">
+            Model any routing problem, preview the normalized graph, then move into solver selection.
+          </h1>
+          <p className="max-w-3xl text-lg text-slate-300">
+            Text, pasted tables, editable matrices, and direct graph drawing all normalize into the same generic routing schema before optimization.
+          </p>
+        </div>
+
+        <Card className="space-y-4 bg-[#1E2A3A]/85">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-slate-400">Workflow</p>
+            <p className="mt-3 text-sm leading-6 text-slate-200">
+              1. Enter or draw the problem.
+              <br />
+              2. Preview the normalized problem.
+              <br />
+              3. Continue to mode and solver selection.
+            </p>
+          </div>
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-slate-100">Problem name</span>
+            <input
+              value={problemName}
+              onChange={(event) => setProblemName(event.target.value)}
+              className="w-full rounded-2xl border border-border bg-[#0F172A]/90 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-400"
+              placeholder="Optional"
+            />
+          </label>
+        </Card>
       </section>
 
-      <div className="grid gap-8 xl:grid-cols-[minmax(0,1.35fr)_minmax(460px,1fr)]">
-        <Card className="space-y-6">
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {MODES.map((item) => {
-                const isActive = item.id === mode;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setMode(item.id)}
-                    className={[
-                      "rounded-full border px-4 py-2 text-sm font-medium transition",
-                      isActive
-                        ? "border-blue-400 bg-blue-500/20 text-blue-100"
-                        : "border-border bg-slate-900/60 text-slate-300 hover:text-white",
-                    ].join(" ")}
-                  >
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.9fr)]">
+        <Card className="space-y-6 bg-[#1E2A3A]/82">
+          <div className="flex flex-wrap gap-2">
+            {TABS.map((tab) => {
+              const isActive = tab.id === activeTab;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={[
+                    "rounded-full border px-4 py-2 text-sm font-medium transition-all duration-300",
+                    isActive
+                      ? "border-blue-400 bg-blue-500/20 text-white shadow-[0_0_18px_rgba(59,130,246,0.18)]"
+                      : "border-border bg-[#0F172A]/80 text-slate-300 hover:border-blue-400/50 hover:text-white",
+                  ].join(" ")}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
 
-            <div className="rounded-[1.75rem] border border-border bg-slate-950/60 p-5">
+          <TabPanel active={activeTab === "text"}>
+            <section className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                    Demo Samples
-                  </p>
-                  <p className="mt-2 text-sm text-slate-300">
-                    Load one of {demoCountByMode(mode)} ready-made examples for this mode instead of starting from scratch.
-                  </p>
+                  <CardTitle className="text-2xl">Text Input</CardTitle>
+                  <CardDescription className="mt-2">
+                    Enter `Name(x,y)` or line-based coordinates. Parsing updates automatically after 300ms.
+                  </CardDescription>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex cursor-pointer select-none items-center gap-2 rounded-full border border-border bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition hover:border-blue-400 hover:text-white">
-                    <input
-                      type="checkbox"
-                      checked={showSamples}
-                      onChange={(event) => setShowSamples(event.target.checked)}
-                      className="h-4 w-4 accent-blue-500"
-                    />
-                    <span>Show samples</span>
-                  </label>
-                  {mode === "gui" ? (
-                    <button
-                      type="button"
-                      onClick={resetCanvas}
-                      className="rounded-full border border-border bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition hover:border-blue-400 hover:text-white"
-                    >
-                      Reset canvas
-                    </button>
-                  ) : null}
-                </div>
+                <InlineParseStatus state={previewState} isVisible={activeTab === "text"} />
               </div>
 
-              {showSamples && mode === "text" ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  {TEXT_DEMO_SAMPLES.map((sample) => (
-                    <button
-                      key={sample.id}
-                      type="button"
-                      onClick={() => applyTextSample(sample.id)}
-                      className="rounded-3xl border border-border bg-slate-900/70 p-4 text-left transition hover:border-blue-400/60 hover:bg-slate-900"
-                    >
-                      <p className="text-sm font-semibold text-white">{sample.title}</p>
-                      <p className="mt-2 text-sm text-slate-300">{sample.summary}</p>
-                      <p className="mt-3 font-mono text-xs text-blue-200">{sample.text}</p>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {TEXT_DEMO_SAMPLES.map((sample) => (
+                  <button
+                    key={sample.id}
+                    type="button"
+                    onClick={() => {
+                      setProblemName(sample.name);
+                      setTextInput(sample.text);
+                    }}
+                    className="rounded-full border border-border bg-[#0F172A]/80 px-3 py-2 text-sm text-slate-200 transition hover:border-blue-400/50 hover:text-white"
+                  >
+                    {sample.title}
+                  </button>
+                ))}
+              </div>
 
-              {showSamples && mode === "table" ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  {TABLE_DEMO_SAMPLES.map((sample) => (
-                    <button
-                      key={sample.id}
-                      type="button"
-                      onClick={() => applyTableSample(sample.id)}
-                      className="rounded-3xl border border-border bg-slate-900/70 p-4 text-left transition hover:border-blue-400/60 hover:bg-slate-900"
-                    >
-                      <p className="text-sm font-semibold text-white">{sample.title}</p>
-                      <p className="mt-2 text-sm text-slate-300">{sample.summary}</p>
-                      <pre className="mt-3 whitespace-pre-wrap font-mono text-xs text-blue-200">
-                        {sample.csv}
-                      </pre>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+              <textarea
+                value={textInput}
+                onChange={(event) => setTextInput(event.target.value)}
+                className="min-h-[320px] w-full rounded-[1.75rem] border border-border bg-[#0B1220]/95 p-5 font-mono text-sm text-slate-100 outline-none transition focus:border-blue-400"
+                placeholder="Example: A(0,0), B(3,5), C(6,2)"
+              />
+            </section>
+          </TabPanel>
 
-              {showSamples && mode === "matrix" ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  {MATRIX_DEMO_SAMPLES.map((sample) => (
-                    <button
-                      key={sample.id}
-                      type="button"
-                      onClick={() => applyMatrixSample(sample.id)}
-                      className="rounded-3xl border border-border bg-slate-900/70 p-4 text-left transition hover:border-blue-400/60 hover:bg-slate-900"
-                    >
-                      <p className="text-sm font-semibold text-white">{sample.title}</p>
-                      <p className="mt-2 text-sm text-slate-300">{sample.summary}</p>
-                      <p className="mt-3 text-xs uppercase tracking-[0.22em] text-slate-500">
-                        Labels
-                      </p>
-                      <p className="mt-1 text-sm text-blue-200">{sample.labels}</p>
-                    </button>
-                  ))}
+          <TabPanel active={activeTab === "table"}>
+            <section className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-2xl">Table Input</CardTitle>
+                  <CardDescription className="mt-2">
+                    Paste CSV data. The parser auto-detects whether it is a node list or distance matrix.
+                  </CardDescription>
                 </div>
-              ) : null}
+                <Badge className="bg-blue-500/12">
+                  {tableDetection === "node_list"
+                    ? "Detected: Node List"
+                    : tableDetection === "distance_matrix"
+                      ? "Detected: Distance Matrix"
+                      : "Detected: Waiting"}
+                </Badge>
+              </div>
 
-              {showSamples && mode === "gui" ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="flex flex-wrap gap-2">
+                {TABLE_DEMO_SAMPLES.map((sample) => (
+                  <button
+                    key={sample.id}
+                    type="button"
+                    onClick={() => {
+                      setProblemName(sample.name);
+                      setTableInput(sample.csv);
+                    }}
+                    className="rounded-full border border-border bg-[#0F172A]/80 px-3 py-2 text-sm text-slate-200 transition hover:border-blue-400/50 hover:text-white"
+                  >
+                    {sample.title}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                value={tableInput}
+                onChange={(event) => setTableInput(event.target.value)}
+                className="min-h-[320px] w-full rounded-[1.75rem] border border-border bg-[#0B1220]/95 p-5 font-mono text-sm text-slate-100 outline-none transition focus:border-blue-400"
+                placeholder="id,x,y&#10;A,0,0&#10;B,3,5"
+              />
+            </section>
+          </TabPanel>
+
+          <TabPanel active={activeTab === "matrix"}>
+            <section className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-2xl">Matrix Input</CardTitle>
+                  <CardDescription className="mt-2">
+                    Edit a weighted distance matrix directly. Node labels auto-generate as W1, W2, and so on.
+                  </CardDescription>
+                </div>
+                <label className="flex items-center gap-3 rounded-full border border-border bg-[#0F172A]/85 px-4 py-2 text-sm text-slate-200">
+                  <span>Size</span>
+                  <select
+                    value={matrixSize}
+                    onChange={(event) => resizeMatrix(Number(event.target.value))}
+                    className="bg-transparent font-mono outline-none"
+                  >
+                    {[3, 4, 5, 6, 7].map((size) => (
+                      <option key={size} value={size} className="bg-[#0A0F1E]">
+                        {size} x {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {MATRIX_DEMO_SAMPLES.map((sample) => (
+                  <button
+                    key={sample.id}
+                    type="button"
+                    onClick={() => loadMatrixSample(sample.labels, sample.matrix, sample.name)}
+                    className="rounded-full border border-border bg-[#0F172A]/80 px-3 py-2 text-sm text-slate-200 transition hover:border-blue-400/50 hover:text-white"
+                  >
+                    {sample.title}
+                  </button>
+                ))}
+              </div>
+
+              <div className="overflow-x-auto rounded-[1.75rem] border border-border bg-[#0B1220]/95 p-4">
+                <table className="min-w-full border-collapse text-sm text-slate-100">
+                  <thead>
+                    <tr>
+                      <th className="px-2 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-500">
+                        Node
+                      </th>
+                      {matrixLabels.map((label, index) => (
+                        <th key={label} className="px-2 py-2">
+                          <input
+                            value={label}
+                            onChange={(event) => updateMatrixLabel(index, event.target.value)}
+                            className="w-16 rounded-xl border border-border bg-[#111A2A] px-2 py-1 text-center font-mono text-sm text-white outline-none transition focus:border-blue-400"
+                          />
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matrixData.map((row, rowIndex) => (
+                      <tr key={`row-${rowIndex}`}>
+                        <td className="px-2 py-2">
+                          <span className="inline-flex rounded-full border border-blue-400/30 bg-blue-500/10 px-3 py-1 font-mono text-xs text-blue-100">
+                            {matrixLabels[rowIndex]}
+                          </span>
+                        </td>
+                        {row.map((value, columnIndex) => (
+                          <td key={`cell-${rowIndex}-${columnIndex}`} className="px-2 py-2">
+                            <input
+                              value={value}
+                              onChange={(event) =>
+                                updateMatrixCell(rowIndex, columnIndex, event.target.value)
+                              }
+                              className="w-16 rounded-xl border border-border bg-[#111A2A] px-2 py-2 text-center font-mono text-sm text-white outline-none transition focus:border-blue-400"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </TabPanel>
+
+          <TabPanel active={activeTab === "gui"}>
+            <section className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-2xl">Draw Graph</CardTitle>
+                  <CardDescription className="mt-2">
+                    Build a route graph visually with the GraphCanvas from Phase 002.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-2">
                   {DRAW_DEMO_SAMPLES.map((sample) => (
                     <button
                       key={sample.id}
                       type="button"
-                      onClick={() => applyDrawSample(sample.id)}
-                      className="rounded-3xl border border-border bg-slate-900/70 p-4 text-left transition hover:border-blue-400/60 hover:bg-slate-900"
+                      onClick={() => {
+                        setProblemName(sample.name);
+                        setCanvasInitialPayload(sample.payload);
+                        setCanvasPayload(sample.payload);
+                        setCanvasKey((current) => current + 1);
+                      }}
+                      className="rounded-full border border-border bg-[#0F172A]/80 px-3 py-2 text-sm text-slate-200 transition hover:border-blue-400/50 hover:text-white"
                     >
-                      <p className="text-sm font-semibold text-white">{sample.title}</p>
-                      <p className="mt-2 text-sm text-slate-300">{sample.summary}</p>
-                      <p className="mt-3 text-xs text-blue-200">
-                        {sample.payload.payload.nodes.length} nodes, {sample.payload.payload.edges.length} edges
-                      </p>
+                      {sample.title}
                     </button>
                   ))}
                 </div>
-              ) : null}
-
-              {showSamples && mode === "map" ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMapCountryCode("MY");
-                      setMapCityIds([
-                        "Kuala Lumpur (KL)",
-                        "Penang",
-                        "Johor Bahru",
-                        "Kota Kinabalu",
-                        "Kuching",
-                        "Malacca City",
-                      ]);
-                      setMapStartCityId("Kuala Lumpur (KL)");
-                    }}
-                    className="rounded-3xl border border-border bg-slate-900/70 p-4 text-left transition hover:border-blue-400/60 hover:bg-slate-900"
-                  >
-                    <p className="text-sm font-semibold text-white">Malaysia major cities</p>
-                    <p className="mt-2 text-sm text-slate-300">
-                      KL, Penang, JB, Kuching, Kota Kinabalu, Melaka.
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMapCountryCode("MY");
-                      setMapCityIds([
-                        "Kuala Lumpur (KL)",
-                        "Shah Alam",
-                        "Ipoh",
-                        "Penang",
-                        "Alor Setar",
-                        "Kota Bharu",
-                        "Kuala Terengganu",
-                        "Kuantan",
-                        "Johor Bahru",
-                      ]);
-                      setMapStartCityId("Kuala Lumpur (KL)");
-                    }}
-                    className="rounded-3xl border border-border bg-slate-900/70 p-4 text-left transition hover:border-blue-400/60 hover:bg-slate-900"
-                  >
-                    <p className="text-sm font-semibold text-white">Peninsular run</p>
-                    <p className="mt-2 text-sm text-slate-300">
-                      A larger peninsular set to show a richer weighted matrix generated from map coordinates.
-                    </p>
-                  </button>
-                </div>
-              ) : null}
-
-              {showSamples && mode === "image" ? (
-                <div className="mt-4 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                  <div className="grid gap-3">
-                    {IMAGE_DEMO_SAMPLES.map((sample) => {
-                      const isActive = sample.id === activeImageSample?.id;
-
-                      return (
-                        <button
-                          key={sample.id}
-                          type="button"
-                          onClick={() => setActiveImageSampleId(sample.id)}
-                          className={[
-                            "rounded-3xl border p-4 text-left transition",
-                            isActive
-                              ? "border-blue-400/70 bg-blue-500/10"
-                              : "border-border bg-slate-900/70 hover:border-blue-400/60 hover:bg-slate-900",
-                          ].join(" ")}
-                        >
-                          <p className="text-sm font-semibold text-white">{sample.title}</p>
-                          <p className="mt-2 text-sm text-slate-300">{sample.summary}</p>
-                          <p className="mt-3 font-mono text-xs text-slate-400">{sample.source}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="rounded-3xl border border-dashed border-border bg-slate-900/60 p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                      OCR Demo Preview
-                    </p>
-                    <p className="mt-3 text-sm text-slate-300">
-                      Phase 002 keeps image ingestion as a stub, but these samples show the kind of text normalization the future OCR pipeline should emit.
-                    </p>
-                    <div className="mt-4 rounded-3xl border border-border bg-slate-950/70 p-4">
-                      <p className="text-sm font-semibold text-white">{activeImageSample?.title}</p>
-                      <p className="mt-2 text-sm text-slate-300">{activeImageSample?.summary}</p>
-                      <pre className="mt-4 whitespace-pre-wrap rounded-2xl border border-border bg-slate-950 px-4 py-3 font-mono text-xs text-blue-200">
-                        {activeImageSample?.extractedPreview}
-                      </pre>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {!showSamples ? (
-                <div className="mt-4 rounded-3xl border border-dashed border-border bg-slate-900/40 px-4 py-3 text-sm text-slate-400">
-                  Samples are hidden to save space. Use <span className="text-white">Show samples</span> when you want demo-ready inputs.
-                </div>
-              ) : null}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-200">Problem name</span>
-                <input
-                  value={problemName}
-                  onChange={(event) => setProblemName(event.target.value)}
-                  placeholder="Optional"
-                  className="w-full rounded-2xl border border-border bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-400"
-                />
-              </label>
-              <div className="rounded-2xl border border-border bg-slate-950/60 px-4 py-3 text-sm text-slate-300">
-                <p className="font-medium text-white">Normalization target</p>
-                <p className="mt-1">Canonical problem schema with nodes, weighted matrix, objective, and metadata.</p>
               </div>
-            </div>
-          </div>
 
-          <div>
-            {mode === "text" ? (
-              <textarea
-                value={textInput}
-                onChange={(event) => setTextInput(event.target.value)}
-                className="min-h-[260px] w-full rounded-[1.75rem] border border-border bg-slate-950/80 p-5 font-mono text-sm text-slate-100 outline-none transition focus:border-blue-400"
-              />
-            ) : null}
-
-            {mode === "table" ? (
-              <textarea
-                value={tableInput}
-                onChange={(event) => setTableInput(event.target.value)}
-                className="min-h-[260px] w-full rounded-[1.75rem] border border-border bg-slate-950/80 p-5 font-mono text-sm text-slate-100 outline-none transition focus:border-blue-400"
-              />
-            ) : null}
-
-            {mode === "matrix" ? (
-              <div className="space-y-4">
-                <label className="space-y-2">
-                  <span className="text-sm font-medium text-slate-200">Matrix labels</span>
-                  <input
-                    value={matrixLabelsInput}
-                    onChange={(event) => setMatrixLabelsInput(event.target.value)}
-                    placeholder="A, B, C"
-                    className="w-full rounded-2xl border border-border bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-400"
-                  />
-                </label>
-                <textarea
-                  value={matrixInput}
-                  onChange={(event) => setMatrixInput(event.target.value)}
-                  className="min-h-[260px] w-full rounded-[1.75rem] border border-border bg-slate-950/80 p-5 font-mono text-sm text-slate-100 outline-none transition focus:border-blue-400"
-                />
-              </div>
-            ) : null}
-
-            {mode === "map" ? (
-              <CountryCityPicker
-                value={{
-                  countryCode: mapCountryCode,
-                  selectedCityIds: mapCityIds,
-                  startCityId: mapStartCityId,
-                }}
-                onChange={(next) => {
-                  setMapCountryCode(next.countryCode);
-                  setMapCityIds(next.selectedCityIds);
-                  setMapStartCityId(next.startCityId);
-                }}
-              />
-            ) : null}
-
-            {mode === "gui" ? (
               <GraphCanvas
-                key={canvasInstanceKey}
+                key={canvasKey}
                 initialPayload={canvasInitialPayload}
                 onPayloadChange={setCanvasPayload}
               />
-            ) : null}
+            </section>
+          </TabPanel>
 
-            {mode === "image" ? (
-              <div className="rounded-[1.75rem] border border-dashed border-border bg-slate-950/70 p-8">
-                <CardTitle>Image ingestion stub</CardTitle>
-                <CardDescription className="mt-3">
-                  OCR-driven image parsing is reserved for Phase 006B. This tab is intentionally non-functional in Phase 002.
+          <TabPanel active={activeTab === "image"}>
+            <section className="space-y-4">
+              <div>
+                <CardTitle className="text-2xl">Image Input</CardTitle>
+                <CardDescription className="mt-2">
+                  OCR-driven extraction is planned next. This tab shows the intended upload entry point.
                 </CardDescription>
               </div>
-            ) : null}
-          </div>
+
+              <div className="rounded-[1.75rem] border border-dashed border-blue-400/30 bg-[#0F172A]/85 p-10 text-center">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-blue-400/30 bg-blue-500/10 text-3xl text-blue-200">
+                  ↑
+                </div>
+                <p className="mt-5 text-lg font-semibold text-white">OCR extraction placeholder</p>
+                <p className="mt-2 text-sm text-slate-300">
+                  Upload and structured image parsing will land in Phase 006B.
+                </p>
+                <Badge className="mt-5 border-amber-400/30 bg-amber-500/10 text-amber-100">
+                  Coming Soon
+                </Badge>
+              </div>
+            </section>
+          </TabPanel>
+
+          {errorMessage ? (
+            <ErrorState
+              message={errorMessage}
+              onRetry={() => {
+                if (activeTab === "image") {
+                  setErrorMessage(null);
+                  setPreviewState("idle");
+                  return;
+                }
+                void handlePreview();
+              }}
+            />
+          ) : null}
 
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={handlePreview}
-              disabled={isSubmitting}
+              onClick={() => {
+                void handlePreview();
+              }}
+              disabled={previewState === "loading" || activeTab === "image"}
               className="rounded-full border border-blue-400 bg-blue-500/20 px-5 py-3 text-sm font-medium text-blue-100 transition hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting ? "Submitting…" : "Preview normalized problem"}
+              {previewState === "loading" && activeTab !== "image"
+                ? "Previewing..."
+                : "Preview normalized problem"}
             </button>
-            <button
-              type="button"
-              onClick={handleCreate}
-              disabled={isSubmitting}
-              className="rounded-full border border-border bg-slate-900/70 px-5 py-3 text-sm font-medium text-slate-200 transition hover:border-blue-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Save problem
-            </button>
-          </div>
-
-          <div className="rounded-[1.75rem] border border-border bg-slate-950/60 p-5">
-            <div className="flex flex-wrap items-start justify-between gap-5">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                  Phase 004
-                </p>
-                <h2 className="text-xl font-semibold text-white">Run Solvers Or Full Benchmark</h2>
-                <p className="max-w-2xl text-sm text-slate-300">
-                  One selected solver launches the live job page. Two or more selected solvers launch the full Phase 004 benchmark across all eight engines and open the comparison dashboard.
-                </p>
-              </div>
-
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-slate-200">Seed</span>
-                <input
-                  value={jobSeed}
-                  onChange={(event) => setJobSeed(event.target.value)}
-                  placeholder="Optional"
-                  className="w-28 rounded-2xl border border-border bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-400"
-                />
-              </label>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {(["ortools", "ga", "aco", "sa", "pso", "nsga2", "tabu", "de"] as SolverName[]).map((solver) => {
-                const isSelected = selectedSolvers.includes(solver);
-                const display = getSolverDisplay(solver);
-                return (
-                  <button
-                    key={solver}
-                    type="button"
-                    onClick={() => toggleSolver(solver)}
-                    className={[
-                      "rounded-[1.5rem] border p-4 text-left transition",
-                      isSelected
-                        ? "border-blue-400 bg-blue-500/15 text-white shadow-[0_0_0_1px_rgba(59,130,246,0.15)]"
-                        : "border-border bg-slate-900/60 text-slate-300 hover:border-blue-400/50 hover:text-white",
-                    ].join(" ")}
-                  >
-                    <span className="inline-flex rounded-full border border-blue-400/30 bg-slate-950/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-200">
-                      {display.abbreviation}
-                    </span>
-                    <span className="mt-3 block text-base font-semibold text-white">
-                      {display.fullName}
-                    </span>
-                    <span className="mt-1 block text-sm text-slate-300">{display.description}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-5 flex flex-wrap gap-3">
+            {nextEnabled ? (
               <button
                 type="button"
-                onClick={handleSaveAndRun}
-                disabled={isSubmitting || isLaunchingJob}
+                onClick={() => {
+                  void handleNext();
+                }}
+                disabled={isAdvancing}
                 className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-5 py-3 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isLaunchingJob
-                  ? "Launching…"
-                  : selectedSolvers.length > 1
-                    ? "Save + Run Phase 004 Benchmark"
-                    : "Save + Run Solver"}
+                {isAdvancing ? "Creating..." : "Next ->"}
               </button>
-            </div>
+            ) : null}
           </div>
-
-          {errorMessages.length > 0 ? (
-            <div className="rounded-3xl border border-rose-400/30 bg-rose-500/10 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-rose-200">
-                Validation
-              </p>
-              <ul className="mt-3 space-y-2 text-sm text-rose-100">
-                {errorMessages.map((message) => (
-                  <li key={message}>{message}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </Card>
 
         <ParsedPreviewCard
+          heading={preview ? "Normalized problem ready" : "Awaiting preview"}
           problem={preview}
           warnings={warnings}
-          heading={preview ? "Normalized problem ready" : "Awaiting preview"}
+          isLoading={previewState === "loading"}
         />
       </div>
     </main>
   );
-}
 
-  function buildRequest({
-  mode,
-  textInput,
-  tableInput,
-  matrixInput,
-  matrixLabelsInput,
-  canvasPayload,
-  problemName,
-  mapCountryCode,
-  mapCityIds,
-  mapStartCityId,
-}: {
-  mode: ProblemInputType;
-  textInput: string;
-  tableInput: string;
-  matrixInput: string;
-  matrixLabelsInput: string;
-  canvasPayload: SerializedCanvasPayload;
-  problemName: string;
-  mapCountryCode: string;
-  mapCityIds: string[];
-  mapStartCityId: string | null;
-}): ProblemInputRequest {
-  const name = problemName.trim() || null;
-
-  if (mode === "text") {
-    return { inputType: "text", payload: textInput, name };
+  function resizeMatrix(nextSize: number): void {
+    setMatrixSize(nextSize);
+    setMatrixLabels((current) =>
+      Array.from({ length: nextSize }, (_, index) => current[index] ?? `W${index + 1}`),
+    );
+    setMatrixData((current) =>
+      Array.from({ length: nextSize }, (_, rowIndex) =>
+        Array.from({ length: nextSize }, (_, columnIndex) => {
+          if (rowIndex === columnIndex) {
+            return "0";
+          }
+          return current[rowIndex]?.[columnIndex] ?? "";
+        }),
+      ),
+    );
   }
 
-  if (mode === "table") {
-    return { inputType: "table", payload: parseDelimitedGrid(tableInput), name };
+  function updateMatrixLabel(index: number, value: string): void {
+    setMatrixLabels((current) =>
+      current.map((label, itemIndex) => (itemIndex === index ? value || `W${index + 1}` : label)),
+    );
   }
 
-  if (mode === "matrix") {
-    const labels = matrixLabelsInput
+  function updateMatrixCell(rowIndex: number, columnIndex: number, value: string): void {
+    setMatrixData((current) =>
+      current.map((row, currentRow) =>
+        row.map((cell, currentColumn) =>
+          currentRow === rowIndex && currentColumn === columnIndex ? value : cell,
+        ),
+      ),
+    );
+  }
+
+  function loadMatrixSample(labelsText: string, matrixText: string, name: string): void {
+    const nextLabels = labelsText
       .split(",")
       .map((label) => label.trim())
       .filter(Boolean);
+    const nextMatrix = parseDelimitedGrid(matrixText);
+    setProblemName(name);
+    setMatrixSize(nextMatrix.length);
+    setMatrixLabels(nextLabels.length > 0 ? nextLabels : createDefaultLabels(nextMatrix.length));
+    setMatrixData(nextMatrix.map((row) => row.map((value) => value.trim())));
+  }
+}
 
+function buildRequest({
+  activeTab,
+  canvasPayload,
+  matrixData,
+  matrixLabels,
+  problemName,
+  tableDetection,
+  tableInput,
+  textInput,
+}: {
+  activeTab: InputTab;
+  canvasPayload: SerializedCanvasPayload;
+  matrixData: string[][];
+  matrixLabels: string[];
+  problemName: string;
+  tableDetection: TableDetection;
+  tableInput: string;
+  textInput: string;
+}): ProblemInputRequest {
+  const name = problemName.trim() || null;
+
+  if (activeTab === "text") {
     return {
-      inputType: "matrix",
-      payload: {
-        data: parseDelimitedGrid(matrixInput),
-      },
-      labels: labels.length > 0 ? labels : undefined,
+      inputType: "text",
       name,
+      payload: textInput.trim(),
     };
   }
 
-  if (mode === "map") {
-    const country = COUNTRIES.find((item) => item.code === mapCountryCode);
-    const cityById = new Map((country?.cities ?? []).map((city) => [city.id, city]));
-    const nodes = mapCityIds
-      .map((cityId) => cityById.get(cityId))
-      .filter((city): city is NonNullable<typeof city> => Boolean(city))
-      .map((city) => ({ id: city.id, label: city.label, x: city.lat, y: city.lon }));
+  if (activeTab === "table") {
+    if (tableDetection === "distance_matrix") {
+      const parsed = parseMatrixTable(tableInput);
+      return {
+        inputType: "matrix",
+        name,
+        labels: parsed.labels,
+        payload: {
+          data: parsed.data,
+        },
+      };
+    }
 
     return {
-      inputType: "map",
-      payload: {
-        nodes,
-        edges: [],
-        startNodeId: mapStartCityId ?? nodes[0]?.id ?? null,
-        returnToStart: true,
-        objective: "min_distance",
-        geo: {
-          countryCode: country?.code ?? mapCountryCode,
-          countryName: country?.name ?? "Unknown",
-          coordinateSystem: "latlon",
-        },
-      },
+      inputType: "table",
       name,
+      payload: {
+        text: tableInput,
+      },
+    };
+  }
+
+  if (activeTab === "matrix") {
+    return {
+      inputType: "matrix",
+      name,
+      labels: matrixLabels,
+      payload: {
+        data: matrixData,
+      },
+    };
+  }
+
+  if (activeTab === "gui") {
+    return {
+      inputType: "gui",
+      name,
+      payload: canvasPayload.payload,
     };
   }
 
   return {
-    inputType: "gui",
-    payload: canvasPayload.payload,
+    inputType: "image",
     name,
+    payload: {},
   };
+}
+
+function InlineParseStatus({
+  state,
+  isVisible,
+}: {
+  state: PreviewState;
+  isVisible: boolean;
+}): JSX.Element | null {
+  if (!isVisible) {
+    return null;
+  }
+
+  const status =
+    state === "success"
+      ? { icon: "OK", label: "Parsed", className: "border-emerald-400/40 bg-emerald-500/10 text-emerald-100" }
+      : state === "error"
+        ? { icon: "X", label: "Invalid", className: "border-rose-400/40 bg-rose-500/10 text-rose-100" }
+        : state === "loading"
+          ? { icon: "...", label: "Parsing", className: "border-blue-400/40 bg-blue-500/10 text-blue-100" }
+          : { icon: "-", label: "Waiting", className: "border-border bg-[#0F172A]/85 text-slate-300" };
+
+  return (
+    <span
+      className={[
+        "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition",
+        status.className,
+      ].join(" ")}
+    >
+      <span className="font-mono">{status.icon}</span>
+      <span>{status.label}</span>
+    </span>
+  );
+}
+
+function TabPanel({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}): JSX.Element {
+  return (
+    <div
+      className={[
+        "overflow-hidden transition-all duration-300",
+        active ? "max-h-[1400px] opacity-100" : "max-h-0 opacity-0 pointer-events-none",
+      ].join(" ")}
+    >
+      {children}
+    </div>
+  );
+}
+
+function detectTableFormat(input: string): TableDetection {
+  const rows = parseDelimitedGrid(input);
+  if (rows.length === 0) {
+    return "unknown";
+  }
+
+  if (looksLikeMatrix(rows)) {
+    return "distance_matrix";
+  }
+
+  return "node_list";
+}
+
+function parseMatrixTable(input: string): { data: string[][]; labels?: string[] } {
+  const rows = parseDelimitedGrid(input);
+  if (rows.length === 0) {
+    return { data: [] };
+  }
+
+  if (rows.every((row) => row.every(isNumericCell))) {
+    return { data: rows };
+  }
+
+  const header = rows[0] ?? [];
+  const body = rows.slice(1);
+  const labels = header.slice(1).map((cell) => cell.trim()).filter(Boolean);
+  const data = body.map((row) => row.slice(1));
+
+  return {
+    data,
+    labels: labels.length > 0 ? labels : undefined,
+  };
+}
+
+function looksLikeMatrix(rows: string[][]): boolean {
+  if (rows.every((row) => row.length === rows.length && row.every(isNumericCell))) {
+    return true;
+  }
+
+  const header = rows[0] ?? [];
+  const body = rows.slice(1);
+
+  if (header.length < 2 || body.length === 0) {
+    return false;
+  }
+
+  const expectedWidth = header.length;
+  if (body.length !== header.length - 1) {
+    return false;
+  }
+
+  return body.every((row) => {
+    if (row.length !== expectedWidth) {
+      return false;
+    }
+    return row.slice(1).every(isNumericCell);
+  });
 }
 
 function parseDelimitedGrid(input: string): string[][] {
@@ -804,67 +785,23 @@ function parseDelimitedGrid(input: string): string[][] {
     .map((line) => line.split(",").map((cell) => cell.trim()));
 }
 
-async function previewProblem(
-  request: ProblemInputRequest,
-  apiBaseUrl: string,
-): Promise<ProblemPreviewResponse> {
-  const response = await fetch(`${apiBaseUrl}/api/problems/preview`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(request),
-  });
-
-  if (!response.ok) {
-    throw new Error(await extractErrorMessage(response));
-  }
-
-  return (await response.json()) as ProblemPreviewResponse;
+function isNumericCell(value: string): boolean {
+  return value.trim() !== "" && !Number.isNaN(Number(value));
 }
 
-async function createProblem(
-  request: ProblemInputRequest,
-  apiBaseUrl: string,
-): Promise<CanonicalProblem> {
-  const response = await fetch(`${apiBaseUrl}/api/problems`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(request),
-  });
-
-  if (!response.ok) {
-    throw new Error(await extractErrorMessage(response));
-  }
-
-  return (await response.json()) as CanonicalProblem;
+function createDefaultLabels(size: number): string[] {
+  return Array.from({ length: size }, (_, index) => `W${index + 1}`);
 }
 
-async function createJob(
-  request: CreateJobRequest,
-  apiBaseUrl: string,
-): Promise<CreateJobResponse> {
-  const response = await fetch(`${apiBaseUrl}/api/jobs`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(request),
-  });
-
-  if (!response.ok) {
-    throw new Error(await extractErrorMessage(response));
+function createDefaultMatrix(size: number, sample?: string): string[][] {
+  if (sample) {
+    const rows = parseDelimitedGrid(sample);
+    if (rows.length === size) {
+      return rows;
+    }
   }
 
-  return (await response.json()) as CreateJobResponse;
-}
-
-async function extractErrorMessage(response: Response): Promise<string> {
-  const payload = (await response.json()) as { detail?: string[] | string };
-  if (Array.isArray(payload.detail)) {
-    return payload.detail.join(" ");
-  }
-  return payload.detail ?? `Request failed with status ${response.status}.`;
+  return Array.from({ length: size }, (_, rowIndex) =>
+    Array.from({ length: size }, (_, columnIndex) => (rowIndex === columnIndex ? "0" : "")),
+  );
 }

@@ -9,12 +9,14 @@ interface ParsedPreviewCardProps {
   problem: CanonicalProblem | null;
   warnings: string[];
   heading: string;
+  isLoading?: boolean;
 }
 
 export function ParsedPreviewCard({
   problem,
   warnings,
   heading,
+  isLoading = false,
 }: ParsedPreviewCardProps): JSX.Element {
   return (
     <Card className="h-full space-y-5">
@@ -26,7 +28,13 @@ export function ParsedPreviewCard({
         </CardDescription>
       </div>
 
-      {!problem ? (
+      {isLoading ? (
+        <div className="space-y-4">
+          <div className="h-6 animate-pulse rounded-2xl bg-slate-800/70" />
+          <div className="h-32 animate-pulse rounded-3xl bg-slate-800/70" />
+          <div className="h-20 animate-pulse rounded-3xl bg-slate-800/70" />
+        </div>
+      ) : !problem ? (
         <div className="rounded-3xl border border-dashed border-border p-6 text-sm text-slate-400">
           Submit a preview or save request to inspect the normalized canonical problem.
         </div>
@@ -38,8 +46,19 @@ export function ParsedPreviewCard({
             <Badge>{problem.startNodeId}</Badge>
           </div>
 
+          {problem.distanceMatrix ? (
+            <div className="rounded-3xl border border-border bg-slate-950/60 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                Distance Matrix Summary
+              </p>
+              <p className="mt-2 text-sm text-slate-200">
+                {problem.distanceMatrix.length} × {problem.distanceMatrix[0]?.length ?? 0} weighted entries
+              </p>
+            </div>
+          ) : null}
+
           <div className="rounded-3xl border border-border bg-slate-950/60">
-            <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr] gap-3 border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+            <div className="grid grid-cols-[1fr_1.4fr_1fr_1fr] gap-3 border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
               <span>ID</span>
               <span>Label</span>
               <span>x</span>
@@ -49,12 +68,12 @@ export function ParsedPreviewCard({
               {problem.nodes.map((node) => (
                 <div
                   key={node.id}
-                  className="grid grid-cols-[1fr_1.5fr_1fr_1fr] gap-3 px-4 py-3 text-sm text-slate-200"
+                  className="grid grid-cols-[1fr_1.4fr_1fr_1fr] gap-3 px-4 py-3 text-sm text-slate-200"
                 >
                   <span className="font-mono">{node.id}</span>
                   <span>{node.label}</span>
-                  <span className="font-mono">{node.x ?? "null"}</span>
-                  <span className="font-mono">{node.y ?? "null"}</span>
+                  <span className="font-mono">{node.x ?? "matrix"}</span>
+                  <span className="font-mono">{node.y ?? "matrix"}</span>
                 </div>
               ))}
             </div>

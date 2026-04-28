@@ -64,7 +64,7 @@ export function SolverRankingTable({ entries }: SolverRankingTableProps): JSX.El
             <tr>
               <th className="px-4 py-3">Solver</th>
               <th className="px-4 py-3">Score</th>
-              <th className="px-4 py-3">Avg Distance</th>
+              <th className="px-4 py-3">Total Distance</th>
               <th className="px-4 py-3">Avg Runtime</th>
             </tr>
           </thead>
@@ -72,7 +72,11 @@ export function SolverRankingTable({ entries }: SolverRankingTableProps): JSX.El
             {sortedEntries.map((entry) => (
               <tr key={entry.solver} className="border-b border-border/70 last:border-b-0">
                 <td className="px-4 py-3 font-medium text-white">{formatSolverLabel(entry.solver)}</td>
-                <td className="px-4 py-3 font-mono text-blue-100">{entry.score.toFixed(2)}</td>
+                <td className="px-4 py-3">
+                  <span className="inline-flex rounded-full border border-blue-400/30 bg-blue-500/10 px-3 py-1 font-mono text-blue-100">
+                    {entry.score.toFixed(2)}
+                  </span>
+                </td>
                 <td className="px-4 py-3 font-mono">{entry.totalDistance.toFixed(1)}</td>
                 <td className="px-4 py-3 font-mono">{entry.runtimeMs.toFixed(0)} ms</td>
               </tr>
