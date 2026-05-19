@@ -27,3 +27,8 @@ I do not write code. I describe issues precisely so the human can give them to C
 ## How to report issues
 List each problem with: file path, line description, what is wrong, what it should be.
 Do not rewrite code. Describe issues clearly so the human can give them to Codex to fix.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->

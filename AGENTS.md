@@ -76,3 +76,8 @@ Rule-based only — never call an LLM inside the recommendation engine.
 - shadcn/ui as component base, customized with Tailwind utility classes
 - Smooth animated transitions on all route maps and convergence charts
 - Mobile-responsive from Phase 005 onward
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
